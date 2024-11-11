@@ -17,7 +17,7 @@ export default async function decorate(block) {
       `;
       container.append(tr);
     });
-  const placeholdertitle = index.title || "--Select currency--";
+  const placeholdertitle =  index.title && index.title.trim() !== "" ? index.title : "-- select currency --";
   console.log("placeholdertitle:::---"+placeholdertitle);
   block.innerHTML = `<h2 class='sectionHeading'>Exchange Rates for the ${placeholdertitle}</h2>`;
   block.append(container);
