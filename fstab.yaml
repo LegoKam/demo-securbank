@@ -1,5 +1,5 @@
 mountpoints:
   /:
-    url: "https://author-p129970-e1316086.adobeaemcloud.com/bin/franklin.delivery/LegoKam/demo-securbank/main"
+    url: "https://author-p53586-e757175.adobeaemcloud.com/bin/franklin.delivery/LegoKam/demo-securbank/main"
     type: "markup"
     suffix: ".html"
