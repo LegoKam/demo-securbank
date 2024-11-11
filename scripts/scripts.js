@@ -1,4 +1,7 @@
 import {
+  sampleRUM,
+  getMetadata,
+  loadScript,
   loadHeader,
   loadFooter,
   decorateButtons,
@@ -10,7 +13,53 @@ import {
   loadSection,
   loadSections,
   loadCSS,
+  toCamelCase,
+  toClassName,
 } from './aem.js';
+import getAudiences from './utils.js';
+
+// Add you templates below
+// window.hlx.templates.add('/templates/my-template');
+
+// Add you plugins below
+// window.hlx.plugins.add('/plugins/my-plugin.js');
+
+/**
+ * Gets all the metadata elements that are in the given scope.
+ * @param {String} scope The scope/prefix for the metadata
+ * @returns an array of HTMLElement nodes that match the given scope
+ */
+export function getAllMetadata(scope) {
+  return [...document.head.querySelectorAll(`meta[property^="${scope}:"],meta[name^="${scope}-"]`)]
+    .reduce((res, meta) => {
+      const id = toClassName(meta.name
+        ? meta.name.substring(scope.length + 1)
+        : meta.getAttribute('property').split(':')[1]);
+      res[id] = meta.getAttribute('content');
+      return res;
+    }, {});
+}
+
+window.hlx.plugins.add('experimentation', {
+  condition: () => getMetadata('experiment')
+    || Object.keys(getAllMetadata('campaign')).length
+    || Object.keys(getAllMetadata('audience')).length,
+  options: { audiences: getAudiences() },
+  url: '/plugins/experimentation/src/index.js',
+});
+
+// Define an execution context
+const pluginContext = {
+  getAllMetadata,
+  getMetadata,
+  loadCSS,
+  loadScript,
+  sampleRUM,
+  toCamelCase,
+  toClassName,
+};
+
+// const LCP_BLOCKS = []; // add your LCP blocks to the list
 
 /**
  * Moves all the attributes from a given elmenet to another given element.
@@ -92,17 +141,43 @@ export function decorateMain(main) {
 async function loadEager(doc) {
   document.documentElement.lang = 'en';
   decorateTemplateAndTheme();
+  // await window.hlx.plugins.run('loadEager');
   const main = doc.querySelector('main');
+  const experimentationOptions = {
+    prodHost: 'www.securbankdemo.com',
+    isProd: () => !(window.location.hostname.endsWith('aem.page')
+    || window.location.hostname === ('localhost')),
+    rumSamplingRate: 1,
+    audiences: getAudiences(),
+  };
+
+  if (getMetadata('experiment')
+    || Object.keys(getAllMetadata('campaign')).length
+    || Object.keys(getAllMetadata('audience')).length) {
+    // eslint-disable-next-line import/no-relative-packages
+    const { loadEager: runEager } = await import('../plugins/experimentation/src/index.js');
+    await runEager(document, experimentationOptions, pluginContext);
+  }
+
   if (main) {
     decorateMain(main);
     document.body.classList.add('appear');
     await loadSection(main.querySelector('.section'), waitForFirstImage);
   }
 
+  sampleRUM.enhance();
+
   try {
     /* if desktop (proxy for fast connection) or fonts already loaded, load fonts.css */
     if (window.innerWidth >= 900 || sessionStorage.getItem('fonts-loaded')) {
       loadFonts();
+      if (getMetadata('experiment')
+        || Object.keys(getAllMetadata('campaign')).length
+        || Object.keys(getAllMetadata('audience')).length) {
+        // eslint-disable-next-line import/no-relative-packages
+        const { loadLazy: runLazy } = await import('../plugins/experimentation/src/index.js');
+        await runLazy(document, experimentationOptions, pluginContext);
+      }
     }
   } catch (e) {
     // do nothing
@@ -126,6 +201,22 @@ async function loadLazy(doc) {
 
   loadCSS(`${window.hlx.codeBasePath}/styles/lazy-styles.css`);
   loadFonts();
+
+  sampleRUM('lazy');
+
+  // Add below snippet at the end of the lazy phase
+  if ((getMetadata('experiment')
+    || Object.keys(getAllMetadata('campaign')).length
+    || Object.keys(getAllMetadata('audience')).length)) {
+    // eslint-disable-next-line import/no-relative-packages
+    const { loadLazy: runLazy } = await import('../plugins/experimentation/src/index.js');
+    await runLazy(document, {
+      prodHost: 'www.securbankdemo.com',
+      isProd: () => window.location.hostname.endsWith('aem.page')
+      || window.location.hostname === ('localhost'),
+      audiences: getAudiences(),
+    }, pluginContext);
+  }
 }
 
 /**
@@ -133,14 +224,20 @@ async function loadLazy(doc) {
  * without impacting the user experience.
  */
 function loadDelayed() {
-  // eslint-disable-next-line import/no-cycle
-  window.setTimeout(() => import('./delayed.js'), 3000);
+  window.setTimeout(() => {
+    window.hlx.plugins.load('delayed');
+    window.hlx.plugins.run('loadDelayed');
+    // eslint-disable-next-line import/no-cycle
+    return import('./delayed.js');
+  }, 3000);
   // load anything that can be postponed to the latest here
   import('./sidekick.js').then(({ initSidekick }) => initSidekick());
 }
 
 async function loadPage() {
+  await window.hlx.plugins.load('eager');
   await loadEager(document);
+  await window.hlx.plugins.load('lazy');
   await loadLazy(document);
   loadDelayed();
 }

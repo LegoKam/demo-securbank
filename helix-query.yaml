@@ -1,16 +1,19 @@
 version: 1
-
 indices:
-  pages:
+  articles:
     include:
-      - '/**'
+      - /**
     exclude:
-      - '/**.json'
+      - /securbank/playground/**
+      - /securbank/configuration
     target: /query-index.json
     properties:
       lastModified:
         select: none
         value: parseTimestamp(headers["last-modified"], "ddd, DD MMM YYYY hh:mm:ss GMT")
-      robots:
-        select: head > meta[name="robots"]
+      title:
+        select: main h1
+        value: textContent(el)
+      description:
+        select: head > meta[name="description"]
         value: attribute(el, "content")

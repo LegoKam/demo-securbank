@@ -2,4 +2,4 @@ mountpoints:
   /:
     url: "https://author-p53586-e757175.adobeaemcloud.com/bin/franklin.delivery/LegoKam/demo-securbank/main"
     type: "markup"
-    suffix: ".html"
+    suffix: ".html?wcmmode=disabled"
